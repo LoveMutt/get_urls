@@ -5,13 +5,14 @@ import random
 import urllib.request as request
 from io import StringIO
 from pprint import pprint
+import os
 
 from lxml import html
 
 log = logging.getLogger(__name__)
 
 
-def get_csvs(fp_csv_list: str = 'csv_url.cache', download=False, persist: bool = False):
+def get_csvs(fp_csv_list: str = 'csv_url.cache', download=False, persist: bool = False, cleanup: bool=False):
     csv_url = 'https://github.com/citizenlab/test-lists/tree/master/lists'
     csvs = []
     if not download:
@@ -33,10 +34,12 @@ def get_csvs(fp_csv_list: str = 'csv_url.cache', download=False, persist: bool =
             csvs.append(full_url)
         if persist and fp_csv_list:
             list_to_file(csvs, fp_csv_list)
+    if cleanup:
+        delete_file(fp_csv_list)
     return csvs
 
 
-def get_urls(fp_url_list: str = '', download=False, persist: bool = False, shuffle: bool = False):
+def get_urls(fp_url_list: str = '', download=False, persist: bool = False, shuffle: bool = False, cleanup: bool=False):
     list_of_urls = []
     if not download:
         log.info('Opening {} for list of URLs'.format(fp_url_list))
@@ -55,6 +58,8 @@ def get_urls(fp_url_list: str = '', download=False, persist: bool = False, shuff
             list_of_urls.extend(parse_cl_csv_for_urls(csv_obj.read().decode()))
         if persist and fp_url_list:
             list_to_file(list_of_urls, fp_url_list)
+    if cleanup:
+        delete_file(fp_url_list)
     if shuffle:
         random.shuffle(list_of_urls)
     return list_of_urls
@@ -82,18 +87,27 @@ def list_to_file(lst: list, out_file: str):
         f.write('\n'.join(lst))
 
 
+def delete_file(fp: str):
+    if not os.path.isfile(fp):
+        log.error('Could not find file [{}] to delete'.format(fp))
+        return
+    os.remove(fp)
+
+
 def _main(args):
-    pprint(get_urls(fp_url_list=args.input_file, download=args.download, persist=args.persist))
+    pprint(get_urls(fp_url_list=args.input_file, download=args.download, persist=args.persist, cleanup=args.cleanup))
 
 
 def getargs():
     p = argparse.ArgumentParser()
     p.add_argument('-i', '--input-file', default='',
                    help='File of URLs to read and return. (will download if doesn\'t exist')
-    p.add_argument('-p', '--persist', action='store_true', default=False,
-                   help='Write the results of downloads to files')
     p.add_argument('-d', '--download', action='store_true', default=False, help='Download lists from citizenlab')
     p.add_argument('-r', '--random-shuffle', action='store_true', default=False, help='Shuffle results before output')
+    persist_grp = p.add_mutually_exclusive_group()
+    persist_grp.add_argument('-p', '--persist', action='store_true', default=False,
+                   help='Write the results of downloads to files')
+    persist_grp.add_argument('-c', '--cleanup', action='store_true', default=False, help='Delete cache files after running')
     return p.parse_args()
 
 
