@@ -1,3 +1,14 @@
+import urllib.request as request
+import logging
+import os
+import csv
+from io import StringIO
+
+from lxml import html
+
+log = logging.getLogger(__name__)
+
+
 def get_urls(from_file=False):
     csv_cache_file = r'F:\TIG\Projects\tie\baryon\baryoncore2\tests\csv_urls.txt'
     urls_cache_file = r'F:\TIG\Projects\tie\baryon\baryoncore2\tests\list_of_urls.txt'
