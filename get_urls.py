@@ -31,3 +31,12 @@ def get_urls(from_file=False):
         with open(urls_cache_file, 'w') as f:
             f.write('\n'.join(list_of_urls))
     return list_of_urls
+
+
+def parse_cl_csv_for_urls(s):
+    content_io = StringIO(s)
+    reader = csv.DictReader(content_io)
+    urls = []
+    for row in reader:
+        urls.append(row['url'])
+    return urls
