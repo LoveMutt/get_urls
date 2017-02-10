@@ -1,49 +1,52 @@
-import urllib.request as request
-import logging
+import argparse
 import csv
+import logging
+import random
+import urllib.request as request
 from io import StringIO
+from pprint import pprint
 
 from lxml import html
 
 log = logging.getLogger(__name__)
 
 
-def get_urls(fp_url_list: str=None, persist: bool=False):
-    csv_cache_file = r'csv_url.cache'
+def get_csvs(fp_csv_list: str = 'csv_url.cache', download=False, persist: bool = False):
     csv_url = 'https://github.com/citizenlab/test-lists/tree/master/lists'
     csvs = []
-    list_of_urls = []
-    download_csvs = True
-    download_urls = True
-    if fp_url_list:
-        download_csvs = False
-        download_urls = False
-    if not download_csvs:
-        log.info('Opening {} for csv files'.format(csv_cache_file))
+    if not download:
+        log.info('Opening {} for csv files'.format(fp_csv_list))
         try:
-            with open(csv_cache_file) as f:
+            with open(fp_csv_list) as f:
                 csvs = f.readlines()
         except (OSError, FileNotFoundError):
-            download_csvs = True
-    if download_csvs:
-        log.info('downloading csv cache from {} to [{}]'.format(csv_url, csv_cache_file))
+            download = True
+    if download:
+        log.info('downloading csv cache from {} to [{}]'.format(csv_url, fp_csv_list))
         web_obj = request.urlopen(csv_url)
         root = html.fromstring(web_obj.read())
-        for link in root.xpath('//a/@href'):
-            if link.endswith('.csv') and '00-' not in link:
-                full_url = request.urljoin(csv_url, link)
-                full_url = get_raw_github_file_url(full_url)
-                csvs.append(full_url)
-        if persist and csv_cache_file:
-            list_to_file(csvs, csv_cache_file)
-    if not download_urls:
+        csv_links = [link for link in root.xpath('//a/@href') if link.endswith('.csv') and '00-' not in link]
+        log.debug('Identified {} target csv links'.format(len(csv_links)))
+        for link in csv_links:
+            full_url = request.urljoin(csv_url, link)
+            full_url = get_raw_github_file_url(full_url)
+            csvs.append(full_url)
+        if persist and fp_csv_list:
+            list_to_file(csvs, fp_csv_list)
+    return csvs
+
+
+def get_urls(fp_url_list: str = '', download=False, persist: bool = False, shuffle: bool = False):
+    list_of_urls = []
+    if not download:
         log.info('Opening {} for list of URLs'.format(fp_url_list))
         try:
             with open(fp_url_list) as f:
                 list_of_urls = f.readlines()
         except (OSError, FileNotFoundError):
-            download_urls = True
-    if download_urls:
+            download = True
+    if download:
+        csvs = get_csvs(persist=persist)
         if not csvs:
             raise RuntimeError('No sources found to download URLs from')
         for file_url in csvs:
@@ -52,6 +55,8 @@ def get_urls(fp_url_list: str=None, persist: bool=False):
             list_of_urls.extend(parse_cl_csv_for_urls(csv_obj.read().decode()))
         if persist and fp_url_list:
             list_to_file(list_of_urls, fp_url_list)
+    if shuffle:
+        random.shuffle(list_of_urls)
     return list_of_urls
 
 
@@ -75,3 +80,22 @@ def list_to_file(lst: list, out_file: str):
     log.info('Writing list to [{}]'.format(out_file))
     with open(out_file, 'w') as f:
         f.write('\n'.join(lst))
+
+
+def _main(args):
+    pprint(get_urls(fp_url_list=args.input_file, download=args.download, persist=args.persist))
+
+
+def getargs():
+    p = argparse.ArgumentParser()
+    p.add_argument('-i', '--input-file', default='',
+                   help='File of URLs to read and return. (will download if doesn\'t exist')
+    p.add_argument('-p', '--persist', action='store_true', default=False,
+                   help='Write the results of downloads to files')
+    p.add_argument('-d', '--download', action='store_true', default=False, help='Download lists from citizenlab')
+    p.add_argument('-r', '--random-shuffle', action='store_true', default=False, help='Shuffle results before output')
+    return p.parse_args()
+
+
+if __name__ == '__main__':
+    _main(getargs())
